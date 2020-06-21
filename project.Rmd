@@ -1,0 +1,223 @@
+---
+title: "512 project"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r data}
+ele<-read.csv("~/Downloads/Electricity.csv", header =TRUE, sep=",")
+colnames(ele)<-c("no","y", "x1","x2","x3","x4","x5","x6","x7")
+ele
+```
+
+```{r}
+# Explore the data, compute the correlation matrix and the pvalue 
+boxplot(ele[,3:9])
+plot(ele[,3:9])
+cor(ele[,3:9])
+
+cor.test.p <- function(x){
+    FUN <- function(x, y) cor.test(x, y)[["p.value"]]
+    z <- outer(
+      colnames(x), 
+      colnames(x), 
+      Vectorize(function(i,j) FUN(x[,i], x[,j]))
+    )
+    dimnames(z) <- list(colnames(x), colnames(x))
+    z
+}
+cor.test.p(ele[, 3:9])
+```
+#first order linear model
+```{r mod1_modeling}
+mod1<-lm(y~x1+x2+x3+x4+x5+x6+x7, ele)
+anova(mod1)
+#summary(mod)#
+library(car)
+residualPlots(mod1)
+plot(mod1)
+```
+
+```{r mod1_diag}
+library(onewaytests)
+ele$fit1<-mod1$fitted.values
+ele$resid1<-mod1$residuals
+ele$group1<-cut(ele$fit1, 2)
+bf.test(resid1~group1, ele)
+shapiro.test(ele$resid1)
+```
+
+```{r mod1_boxcox}
+library(MASS)
+bcmle<-boxcox(lm(y~x1+x2+x3+x4+x5+x6+x7,data=ele),lambda=seq(-3,3, by=0.1))
+lambda<-bcmle$x[which.max(bcmle$y)]
+lambda
+```
+#lambda use the original data
+```{r mod2_modeling}
+ele$ty<-(ele$y)^lambda
+mod2<-lm(ty~x1+x2+x3+x4+x5+x6+x7, ele)
+anova(mod2)
+summary(mod2)
+library(car)
+residualPlots(mod2)
+plot(mod2)
+```
+
+```{r f test1}
+#h0: all b3=b5=b7=0
+ssr<-31.5+15.1+0.3
+FS<-(ssr/3)/(1349.9/150)
+FS
+qf(0.95,3,150)
+```
+
+```{r mod2_diag}
+library(onewaytests)
+ele$fit2<-mod2$fitted.values
+ele$resid2<-mod2$residuals
+ele$group2<-cut(ele$fit2, 2)
+bf.test(resid2~group2, ele)
+shapiro.test(ele$resid2)
+```
+
+```{r first order reduced model}
+rmod<-lm(ty~x1+x2+x4+x6, ele)
+anova(rmod)
+library(onewaytests)
+ele$fitr<-rmod$fitted.values
+ele$residr<-rmod$residuals
+ele$groupr<-cut(ele$fitr, 2)
+bf.test(residr~groupr, ele)
+shapiro.test(ele$residr)
+```
+
+```{r polynomials model}
+ele$x11<-ele$x1 ^2
+ele$x22<-ele$x2 ^2
+ele$x33<-ele$x3 ^2
+ele$x44<-ele$x4 ^2
+ele$x55<-ele$x5 ^2
+ele$x66<-ele$x6 ^2
+ele$x77<-ele$x7 ^2
+ele$x12<-ele$x1 * ele$x2
+ele$x13<-ele$x1 * ele$x3
+ele$x14<-ele$x1 * ele$x4
+ele$x15<-ele$x1 * ele$x5
+ele$x16<-ele$x1 * ele$x6
+ele$x17<-ele$x1 * ele$x7
+ele$x23<-ele$x2 * ele$x3
+ele$x24<-ele$x2 * ele$x4
+ele$x25<-ele$x2 * ele$x5
+ele$x26<-ele$x2 * ele$x6
+ele$x27<-ele$x2 * ele$x7
+ele$x34<-ele$x3 * ele$x4
+ele$x35<-ele$x3 * ele$x5
+ele$x36<-ele$x3 * ele$x6
+ele$x37<-ele$x3 * ele$x7
+ele$x45<-ele$x4 * ele$x5
+ele$x46<-ele$x4 * ele$x6
+ele$x47<-ele$x4 * ele$x7
+ele$x56<-ele$x5 * ele$x6
+ele$x57<-ele$x5 * ele$x7
+ele$x67<-ele$x6 * ele$x7
+pmod<-lm(ty~x1+x2+x3+x4+x5+x6+x7+x11+x22+x33+x44+x55+x66+x77+x12+x13+x14+x15+x16+x17+x23+x24+x25+x26+x27+x34+x35+x36+x37+x45+x46+x47+x56+x57+x67, ele)
+anova(pmod)
+library(onewaytests)
+ele$fitp<-pmod$fitted.values
+ele$residp<-pmod$residuals
+ele$groupp<-cut(ele$fitp, 2)
+bf.test(residp~groupp, ele)
+shapiro.test(ele$residp)
+```
+
+```{r f test2}
+pmod2<-lm(ty~x1+x2+x3+x4+x5+x6+x11+x22+x33+x44+x66+x77+x12+x13+x14+x16+x17+x47, ele)
+library(onewaytests)
+ele$fitp<-pmod2$fitted.values
+ele$residp<-pmod2$residuals
+ele$groupp<-cut(ele$fitp, 2)
+bf.test(residp~groupp, ele)
+shapiro.test(ele$residp)
+anova(pmod2)
+ssr<-229.4-197.6
+FS<-(ssr/17)/(197.6/122)
+FS
+qf(0.95,17,122)
+```
+
+```{r bs polynomial}
+library(ALSM)
+elenew<-cbind(scale(ele$ty), scale(ele$x1), scale(ele$x2),scale(ele$x3), scale(ele$x4),scale(ele$x5), scale(ele$x6),scale(ele$x11),scale(ele$x22),scale(ele$x33),scale(ele$x44), scale(ele$x66),scale(ele$x77),scale(ele$x12),scale(ele$x13),scale(ele$x14),scale(ele$x16),scale(ele$x17),scale(ele$x47))
+elenew<-as.data.frame(elenew)
+colnames(elenew)<-c("y", "x1", "x2","x3","x4","x5","x6","x11","x22","x33","x44","x66","x77","x12","x13","x14","x16","x17","x47")
+bs<-BestSub(elenew[,2:19], elenew$y, num=5)
+boxplot(elenew[,1:19])
+plot(elenew[,1:19])
+cor(elenew[,1:19])
+bs
+bmod<-lm(y~x1+x2+x11+x33+x44+x12+x13+x16+x17, elenew)
+anova(bmod)
+library(onewaytests)
+elenew$fit<-bmod$fitted.values
+elenew$residb<-bmod$residuals
+elenew$groupb<-cut(elenew$fit, 2)
+elenew
+bf.test(residb~groupb, elenew)
+shapiro.test(elenew$residb)
+```
+```
+```
+```{r bmod_diag}
+library(car)
+avPlots(bmod)
+library(fmsb)
+VIF(lm(x1~x2+x11+x33+x44+x12+x13+x16+x17,data = elenew))
+VIF(lm(x2~x1+x11+x33+x44+x12+x13+x16+x17,data = elenew))
+VIF(lm(x11~x1+x2+x33+x44+x12+x13+x16+x17,data = elenew))
+VIF(lm(x33~x1+x2+x11+x44+x12+x13+x16+x17,data = elenew))
+VIF(lm(x44~x1+x2+x11+x33+x12+x13+x16+x17,data = elenew))
+VIF(lm(x12~x1+x2+x11+x33+x44+x13+x16+x17,data = elenew))
+VIF(lm(x13~x1+x2+x11+x33+x44+x12+x16+x17,data = elenew))
+VIF(lm(x16~x1+x2+x11+x33+x44+x12+x13+x17,data = elenew))
+VIF(lm(x17~x1+x2+x11+x33+x44+x12+x13+x16,data = elenew))
+```
+
+
+```{r ridge}
+library(lmridge)
+library(MASS)
+bmod2<-lmridge(y~x1+x2+x11+x33+x44+x12+x13+x16+x17, data=elenew, K=seq(0, 1, 0.02))
+plot(bmod2)
+vif(bmod2)
+summary(lmridge(y~x1+x2+x11+x33+x44+x12+x13+x16+x17, data=elenew, K=0.08))
+```
+
+```{r bs2_diag_outliers and robust}
+influencePlot(bmod)
+#hati
+bs_resid<-resid(bmod)
+hati<-lm.influence(lm(y~x1+x2+x11+x33+x44+x12+x13+x16+x17, elenew))$hat
+hati
+mean(hati)
+#identify outliers
+dffits(bmod)
+cooks.distance(bmod)
+dfbetasPlots(bmod)
+plot(bmod, pch=18, col='red', which=c(4))
+library(MASS)
+r<-rlm(y~x1+x2+x11+x33+x44+x12+x13+x16+x17, data = elenew, psi=psi.bisquare)
+anova(r)
+summary(r)
+library(car)
+library(onewaytests)
+elenew$fit3<-r$fitted.values
+elenew$resid3<-r$residuals
+elenew$group3<-cut(elenew$fit3, 2)
+bf.test(resid3~group3, elenew)
+shapiro.test(elenew$resid3)
+```
+
+
+
